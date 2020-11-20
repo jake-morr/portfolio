@@ -3,7 +3,7 @@ select distinct
 ,  AcSt.name
 , AcSt.ID
 , ZSKO_TRANSCRIPTS.F_GET_OVRL_CUM_CR_TERM(AcSt.person_uid,AcSt.academic_period) AS credits
-, GPA.gpa --not sure if this is correct. Might be a function for term
+--, GPA.gpa --not sure if this is correct. Might be a function for term
 , ZSKO_TRANSCRIPTS.f_get_EWU_cum_gpa_term(AcSt.person_uid,AcSt.academic_period) AS cum_gpa
 , AcSt.student_classification
 , AcSt.major_desc -- dont forget primary program indicator
