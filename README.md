@@ -28,7 +28,7 @@ This code was developed to provide a forecast for the HSI committee and support 
 # JED Healthy Minds Survey #
 ############################
 
-This code was devloped in consultant with the EWU JED team and the Healthy Minds Survey through University of Michigan. Nick Franco and the JED team tasked me with evaluating 
+This code was devloped in consultation with the EWU JED team and the Healthy Minds Survey through University of Michigan. Nick Franco and the JED team tasked me with evaluating 
 statistical differences between population groups.
 
 #########################################
