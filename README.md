@@ -1,8 +1,8 @@
 # portfolio
 
 #############################
- DFW Longitudinal Analysis 
- RStudio                   
+ # DFW Longitudinal Analysis 
+ # RStudio                   
 #############################
 
 This code was developed to evaluate the impact of DFW's recieved by students. This project will be improved upon by inlcuding Mark Wards program/course complexity data to
@@ -10,8 +10,8 @@ evaluate the effect of receiving a DFW in a course with high course importance. 
 Early Warning System project.
 
 #################################
- Graduated Grduating Datablock #
- SQL Code for Argos            #
+ # Graduated Grduating Datablock #
+ # SQL Code for Argos            #
 #################################
 
 This is the code powering the graduated/applied to graduate datablock. This DataBlock was developed to be able to answer 80% of inquiries on students who have graduated or have
