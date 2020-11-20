@@ -1,5 +1,5 @@
 # ==================================================================================================
-#   Program:      JED HEalthy Minds Survey Analysis    
+#   Program:      JED Healthy Minds Survey Analysis    
 #   Description:  Statistical Analysis of the Campus wide JED Healthy Minds Survey  
 #   
 #   Modification History:
