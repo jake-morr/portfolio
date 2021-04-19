@@ -1,8 +1,8 @@
 # portfolio
 
 #############################
- # FYE Analysis              #
- # RStudio                   #
+  FYE Analysis              #
+  RStudio                   #
 #############################
 
 This code was developed to evaluate the impact of First Year Experience course taken by FTIC students at EWU. Major findings inlcude slight but positive effects for individuals who take an FYE in fall-to-winter retention, however large and negative effects for those who fail the course.
