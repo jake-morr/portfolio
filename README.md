@@ -5,6 +5,11 @@ RStudio
 
 This code was developed to evaluate the impact of First Year Experience course taken by FTIC students at EWU. Major findings inlcude slight but positive effects for individuals who take an FYE in fall-to-winter retention, however large and negative effects for those who fail the course.
 
+1A
+sql
+
+This is the code used to gather the data for the FYE analysis described above.
+
 
 2. GPA Deviation
 RStudio
