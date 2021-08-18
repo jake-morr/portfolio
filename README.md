@@ -1,5 +1,10 @@
 # portfolio
 
+0. Naive Bayes
+RStudio
+
+This code was used to run a predictive model on FTIC student retention. Overall model accuracy = 84%.
+
 1. FYE Analysis
 RStudio
 
