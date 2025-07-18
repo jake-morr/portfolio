@@ -1,7 +1,6 @@
 ##########################################
 # TITLE: REGISTRATION_ANALYSIS_CLEANING
 # AUTHOR: Jake Morrison
-# DATE: 05/26/2020
 # DESCRIPTION: Identifies undergraduate students who have not yet registered 
 #              and flags those registering late, including hold status.
 ##########################################
