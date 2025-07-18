@@ -1,4 +1,4 @@
-# portfolio
+# Portfolio
 
 0. Naive Bayes
 RStudio
@@ -55,3 +55,7 @@ This STATA code was developed to run clean the data and run the regressions for 
 8. Thesis Robustness Check
 
 This STATA code was developed for the robustness checks portion of my Masters thesis
+
+9. Retention Tracking
+
+This code runs a retention tracking dashboard that allows users to evaluate retention year-over-year to the comparable date and time.
