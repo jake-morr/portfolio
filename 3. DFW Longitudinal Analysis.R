@@ -1,255 +1,194 @@
-  ##########################################
-  # TITLE: DFW Longitudinal Analysis
-  # AUTHOR: Jake Morrison
-  # DATE:               DETAIL:
-  # 06/09/2020          created program
-  ##########################################
-  
-  # setup #
-  
-  setwd("N:/Projects/INSTITUTIONAL_ANALYSTICS_AND_PLANNING/DFW_LONGITUDINAL_ANALYSIS")
-  
-  
-  library(tidyr)      # data manipulation
-  library(dplyr)      # data manipulation
-  library(stringr)
-  library(purrr)
-  library(ggplot2)    # data visualization
-  library(data.table) # data loading speed
-  library(Hmisc)      # for %nin%
-  library(dummies)    # for creating dummy variables
-  library(doBy)
-  library(sqldf)      # for writing SQL in R
-  
-  
-  rm(list = ls()) # remove all enviornment items
-  
-  #---------------
-  # read in data -
-  #---------------
-  
-  data <- read.csv("export.csv", header=T, sep =",")
-  enrollment <- read.csv("enrollment.csv", header = T, sep =",")
- 
-  sqldf("select distinct count(distinct PERSON_UID) from data where COURSE_IDENTIFICATION = 'ACCT251'")
-  
-  # ------------------
-  # - rename columns -
-  # ------------------
-  
-  enrollment <- enrollment %>% rename(person = PERSON_UID)
-  data <- data %>% rename(person = PERSON_UID)
-  data <- data %>% rename(course = COURSE_IDENTIFICATION)
-  data <- data %>% rename(major_at_time = MAJOR_DESC)
-  data <- data %>% rename(college_at_time = COLLEGE_DESC)
-  
-  # -------------------------------------------------------------
-  # - create number of observation fields to identify repeaters -
-  # -------------------------------------------------------------
-  
-  data <- data %>% group_by(person, course) %>% add_count(person) %>% ungroup
-  
-  data <- data %>% rename(repeats = n)
-  
-  data <- data %>% mutate(repeated_ind = ifelse(repeats > 1, 1,0))
-  
-# named repeated_ind because repeat is a function
+##########################################
+# TITLE: DFW Longitudinal Analysis
+# AUTHOR: Jake Morrison
+# DATE: 06/09/2020
+# DESCRIPTION: Tracks students who receive D, F, or W grades and analyzes their outcomes over time.
+##########################################
 
-  # -----------------------------------
-  # - filter irrelevant* grade values -
-  # -----------------------------------
-    
-    
-  data <- data %>% filter(FINAL_GRADE != '(0.7)')
-  data <- data %>% filter(FINAL_GRADE != '(0.0)')
-  data <- data %>% filter(FINAL_GRADE != "NC")
-  data <- data %>% filter(FINAL_GRADE != "P")
-  data <- data %>% filter(FINAL_GRADE != "XC")
-  data <- data %>% filter(FINAL_GRADE != "XF")
-  data <- data %>% filter(FINAL_GRADE != "Y")
-  
-  
-  # ----------------------------------------------------------
-  # - conver number grades to letter grades 
-  # -- can make this number grades to letter grade if easier -
-  # ----------------------------------------------------------  
-  
-  data <- data %>% mutate(FINAL_GRADE = case_when(FINAL_GRADE == '4.0' ~ "A",
-                                                  FINAL_GRADE == '3.9' ~ "A",
-                                                  FINAL_GRADE == '3.8' ~ "A-",
-                                                  FINAL_GRADE == '3.7' ~ "A-",
-                                                  FINAL_GRADE == '3.6' ~ "A-",
-                                                  FINAL_GRADE == '3.5' ~ "B+",
-                                                  FINAL_GRADE == '3.4' ~ "B+",
-                                                  FINAL_GRADE == '3.3' ~ "B+",
-                                                  FINAL_GRADE == '3.2' ~ "B+",
-                                                  FINAL_GRADE == '3.1' ~ "B",
-                                                  FINAL_GRADE == '3.0' ~ "B",
-                                                  FINAL_GRADE == '2.9' ~ "B",
-                                                  FINAL_GRADE == '2.8' ~ "C+",
-                                                  FINAL_GRADE == '2.7' ~ "B-",
-                                                  FINAL_GRADE == '2.6' ~ "C+",
-                                                  FINAL_GRADE == '2.5' ~ "C+",
-                                                  FINAL_GRADE == '2.4' ~ "C+",
-                                                  FINAL_GRADE == '2.3' ~ "C+",
-                                                  FINAL_GRADE == '2.2' ~ "C",
-                                                  FINAL_GRADE == '2.1' ~ "C",
-                                                  FINAL_GRADE == '2.0' ~ "C",
-                                                  FINAL_GRADE == '1.9' ~ "C-",
-                                                  FINAL_GRADE == '1.8' ~ "C-",
-                                                  FINAL_GRADE == '1.7' ~ "C-",
-                                                  FINAL_GRADE == '1.6' ~ "D+",
-                                                  FINAL_GRADE == '1.5' ~ "D+",
-                                                  FINAL_GRADE == '1.4' ~ "D+",
-                                                  FINAL_GRADE == '1.3' ~ "D+",
-                                                  FINAL_GRADE == '1.2' ~ "D+",
-                                                  FINAL_GRADE == '1.1' ~ "D",
-                                                  FINAL_GRADE == '1.0' ~ "D",
-                                                  FINAL_GRADE == '0.9' ~ "D",
-                                                  FINAL_GRADE == '0.8' ~ "D-",
-                                                  FINAL_GRADE == '0.7' ~ "D-",
-                                                  FINAL_GRADE == '0.0' ~ "F",
-                                                  TRUE ~ FINAL_GRADE))
+# ---- Setup ----
 
-  #-----------------------------------------
-  #- create outcome if course was repeated -
-  #-----------------------------------------
-  
-  # highest rank of academic period = last period taking the course
-  
-  data <- data %>% group_by(person,course) %>% mutate("ranks" = rank(ACADEMIC_PERIOD)) %>% ungroup
-  
-  #--------------------------------------------------------------------------
-  
-  #this gets rid of previous observations and I dont want to do that 
-  
-  #test <- data %>% group_by(person,course) %>% filter(ranks == max(ranks))
-  
-  #-----------------------------------------------------------------------------------------------------------------------
-  
-  #
-  # This code creates the final outcome grade as the highest grade acheived
-  # problems include: 
-  # - what if a student did not get a better grade the second time
-  # - this is simply based on lowest grade, not value
-  # --- F > W, but I think we are more intersted in the W showing
-  # ------- some sort of case_when statement for indicators should be able to clear this up1
-  # ---------- need to figure out how to populate a column conditionally
-  
-  #data <- data %>% group_by(person,course) %>% mutate(repeated_grade = case_when(observations >=2 ~ min(FINAL_GRADE) ))
-  
-  #-----------------------------------------------------------------------------------------------------------------------
-  
-  data <- data %>% group_by(person,course) %>% mutate (outcome = case_when(repeated_ind == 1 ~ "re-took class",)) %>% ungroup
-  
-  data <- data %>% group_by(person,course) %>% mutate (repeated_grade = case_when(ranks == max(ranks) & repeated_ind == '1' ~ FINAL_GRADE)) %>% ungroup
-  
-  #------------------------------------------------------
-  #
-  # This code fills the repeated_grade column for the repeated term
-  # - I want to fill to repeated grade for all terms
-  #
-  #------------------------------------------------------
-  
-  data <- data %>% group_by(person,course) %>% mutate (repeated_grade = case_when(repeated_grade == is.na(repeated_grade) ~ repeated_grade,
-                                                                                   TRUE ~ repeated_grade)) %>% ungroup
-  # -----------------------------------------------------------------
-  # - filter to keep students who received DFW or retook the course -
-  # -----------------------------------------------------------------  
-  
-  data <- data %>% filter(repeats >= 2 | FINAL_GRADE %in% c("D+","D","D-","F","W"))
-  
-  #--------------------------------------  
-  #- generating enrollment gap variable -
-  #--------------------------------------
-  
-  # this creates the last term for which the student enrolled #
-  
-  enrollment <- enrollment %>% group_by(person) %>% filter(ACADEMIC_PERIOD == max(ACADEMIC_PERIOD)) %>% ungroup
+setwd("N:/Projects/INSTITUTIONAL_ANALYSTICS_AND_PLANNING/DFW_LONGITUDINAL_ANALYSIS")
 
-  # merge all enrollment data #  
-    
-  data <- merge(x = data, y = enrollment, by = "person", all.x = TRUE)
-  
-  data <- data %>% rename(latest_major = Major)
-  
-  data <- data %>% rename(current_period = ACADEMIC_PERIOD.x)
-  
-  data <- data %>% rename(last_period = ACADEMIC_PERIOD.y)
-  
-  data <- data %>% rename(last_college = college)
-  
-  data <- data %>% mutate(difference = last_period - current_period)
-  
-  data <- data %>% rename(GRADUATED_IND = MAX.AO.GRADUATED_IND.)
-  
- 
-  # this calculates immediate stop outs #
-  
-  data <- data %>% mutate(outcome = case_when(difference == 0 & is.na(outcome) & last_period <= '201940' ~ 'stopped out immediatly',
-                                                  TRUE ~ outcome))  
-  
-  # changed major #
-  
-  data <- data %>% mutate(changed_major = case_when(major_at_time != latest_major ~ 1,
-                                                       TRUE ~ 0))
+# Load libraries
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(purrr)
+library(ggplot2)
+library(data.table)
+library(Hmisc)
+library(dummies)
+library(doBy)
+library(sqldf)
 
-  data <- data %>% mutate(outcome = case_when(changed_major == 1 & is.na(outcome) ~ "changed major",
-                                                  TRUE ~ outcome))
-  # Changed college #
-  
-  data <- data %>% mutate(changed_college_ind = case_when(college_at_time != last_college ~ 1,
-                                                    TRUE ~ 0))
-  
-  # stopped out ever #
-  
-  data <- data %>% mutate(outcome = case_when(last_period <= '201940' & is.na(outcome) & GRADUATED_IND != 'Y' ~ "stopped out",
-                                                  TRUE ~ outcome))
+# Clear environment
+rm(list = ls())
 
-  # stop out data validation table #
-  
-  stop_outs <- data %>% filter(outcome == "stopped out" | outcome == "stopped out immediatly")
-  
-  
-  data <- data %>% mutate(outcome = case_when(GRADUATED_IND == "Y" & is.na(outcome) ~ "graduated without course",
-                                                    TRUE ~ outcome ))
-  # ----------------------
-  #- sub_column outcomes -
-  #-----------------------
-  
-  
-  data <- data %>% mutate(sub_outcome = case_when(outcome == "re-took class" & GRADUATED_IND == 'Y' & major_at_time == latest_major ~ "re-took & graduated in major"))
-  
-  data <- data %>% mutate(sub_outcome = case_when(outcome == "re-took class" & GRADUATED_IND == 'Y' & major_at_time != latest_major ~ "re-took & graduated in new major",
-                                                        TRUE ~ sub_outcome))
-  
-  
-  data <- data %>% mutate(sub_outcome = case_when(outcome == "changed major" & GRADUATED_IND == 'Y' ~ "changed major & graduated",
-                                                      TRUE ~ sub_outcome))
-  # I will want to add in 202030 & 202040 eventually #
-  
-  data <- data %>% mutate(sub_outcome = case_when(last_period == '202020' & GRADUATED_IND != 'Y' ~ "still at University",
-                                                      TRUE ~ sub_outcome))
-  # due to bad coding this goes down here #
-  
-  data <- data %>% mutate(outcome = case_when(sub_outcome == "still at University" & is.na(outcome) ~ "still at University",
-                                                    TRUE ~ outcome ))
-  #---------------------------------------------
-  #- creating indicator variables for outcomes -
-  #---------------------------------------------
-  
-  data <- data %>% mutate(stopped_out_ind = case_when(last_period <= '201940' & GRADUATED_IND != 'Y' ~ 1
-                                                            , TRUE ~ 0))
-  
-  data <- data %>% mutate(GRADUATED_IND_IND = case_when(GRADUATED_IND == 'Y' ~ 1
-                                , TRUE ~ 0))
-  data <- data %>% mutate(persisting = case_when(last_period > '201940' & GRADUATED_IND != 'Y' ~ 1
-                                                        , TRUE ~ 0) )
-  
-  data <- data %>% mutate(changed_major_ind = (case_when(major_at_time != latest_major ~ 1,
-                                                            TRUE ~0 )))
-  
-  data <- data %>% mutate(changed_major_grad = case_when(GRADUATED_IND_IND == '1' & changed_major_ind == '1' ~ 1,
-                                                         TRUE ~ 0))
-  
-  
+# ---- Load Data ----
+
+data <- read.csv("export.csv", header = TRUE)
+enrollment <- read.csv("enrollment.csv", header = TRUE)
+
+# Preview unique student count for a course (e.g., ACCT251)
+sqldf("SELECT COUNT(DISTINCT PERSON_UID) FROM data WHERE COURSE_IDENTIFICATION = 'ACCT251'")
+
+# ---- Clean & Prepare Variables ----
+
+# Standardize column names
+data <- data %>%
+  rename(
+    person = PERSON_UID,
+    course = COURSE_IDENTIFICATION,
+    major_at_time = MAJOR_DESC,
+    college_at_time = COLLEGE_DESC
+  )
+
+enrollment <- enrollment %>%
+  rename(person = PERSON_UID)
+
+# ---- Identify Repeaters ----
+
+data <- data %>%
+  group_by(person, course) %>%
+  add_count(name = "repeats") %>%
+  ungroup() %>%
+  mutate(repeated_ind = ifelse(repeats > 1, 1, 0))  # 1 = repeated course
+
+# ---- Filter Invalid or Non-graded Attempts ----
+
+invalid_grades <- c("(0.7)", "(0.0)", "NC", "P", "XC", "XF", "Y")
+data <- data %>% filter(!FINAL_GRADE %in% invalid_grades)
+
+# ---- Convert Numeric Grades to Letter Grades ----
+
+data <- data %>%
+  mutate(FINAL_GRADE = case_when(
+    FINAL_GRADE %in% c('4.0', '3.9') ~ "A",
+    FINAL_GRADE %in% c('3.8', '3.7', '3.6') ~ "A-",
+    FINAL_GRADE %in% c('3.5', '3.4', '3.3', '3.2') ~ "B+",
+    FINAL_GRADE %in% c('3.1', '3.0', '2.9') ~ "B",
+    FINAL_GRADE == '2.8' ~ "C+",
+    FINAL_GRADE == '2.7' ~ "B-",
+    FINAL_GRADE %in% c('2.6', '2.5', '2.4', '2.3') ~ "C+",
+    FINAL_GRADE %in% c('2.2', '2.1', '2.0') ~ "C",
+    FINAL_GRADE %in% c('1.9', '1.8', '1.7') ~ "C-",
+    FINAL_GRADE %in% c('1.6', '1.5', '1.4', '1.3', '1.2') ~ "D+",
+    FINAL_GRADE %in% c('1.1', '1.0', '0.9') ~ "D",
+    FINAL_GRADE %in% c('0.8', '0.7') ~ "D-",
+    FINAL_GRADE == '0.0' ~ "F",
+    TRUE ~ FINAL_GRADE
+  ))
+
+# ---- Create Repeat Outcome Indicators ----
+
+data <- data %>%
+  group_by(person, course) %>%
+  mutate(ranks = rank(ACADEMIC_PERIOD)) %>%
+  ungroup()
+
+# Mark final attempt grade for repeaters
+data <- data %>%
+  group_by(person, course) %>%
+  mutate(
+    repeated_grade = ifelse(ranks == max(ranks) & repeated_ind == 1, FINAL_GRADE, NA)
+  ) %>%
+  fill(repeated_grade, .direction = "downup") %>%
+  ungroup()
+
+# Label outcome for repeaters
+data <- data %>%
+  mutate(outcome = ifelse(repeated_ind == 1, "re-took class", NA))
+
+# ---- Filter: DFWs and Repeaters Only ----
+
+data <- data %>%
+  filter(repeats >= 2 | FINAL_GRADE %in% c("D+", "D", "D-", "F", "W"))
+
+# ---- Enrollment Gaps & Current Status ----
+
+# Identify last enrolled term
+enrollment_latest <- enrollment %>%
+  group_by(person) %>%
+  filter(ACADEMIC_PERIOD == max(ACADEMIC_PERIOD)) %>%
+  ungroup()
+
+# Merge enrollment with main data
+data <- merge(data, enrollment_latest, by = "person", all.x = TRUE) %>%
+  rename(
+    latest_major = Major,
+    current_period = ACADEMIC_PERIOD.x,
+    last_period = ACADEMIC_PERIOD.y,
+    last_college = college,
+    GRADUATED_IND = MAX.AO.GRADUATED_IND.
+  ) %>%
+  mutate(difference = last_period - current_period)
+
+# ---- Outcome Categories ----
+
+# 1. Stopped out immediately
+data <- data %>%
+  mutate(outcome = ifelse(
+    is.na(outcome) & difference == 0 & last_period <= '201940',
+    "stopped out immediately",
+    outcome
+  ))
+
+# 2. Changed Major
+data <- data %>%
+  mutate(
+    changed_major = ifelse(major_at_time != latest_major, 1, 0),
+    outcome = ifelse(is.na(outcome) & changed_major == 1, "changed major", outcome)
+  )
+
+# 3. Changed College
+data <- data %>%
+  mutate(
+    changed_college_ind = ifelse(college_at_time != last_college, 1, 0)
+  )
+
+# 4. Stopped out
+data <- data %>%
+  mutate(outcome = ifelse(
+    is.na(outcome) & last_period <= '201940' & GRADUATED_IND != 'Y',
+    "stopped out",
+    outcome
+  ))
+
+# 5. Graduated without retaking course
+data <- data %>%
+  mutate(outcome = ifelse(
+    is.na(outcome) & GRADUATED_IND == 'Y',
+    "graduated without course",
+    outcome
+  ))
+
+# ---- Sub-outcome Classification ----
+
+data <- data %>%
+  mutate(sub_outcome = case_when(
+    outcome == "re-took class" & GRADUATED_IND == 'Y' & major_at_time == latest_major ~ "re-took & graduated in major",
+    outcome == "re-took class" & GRADUATED_IND == 'Y' & major_at_time != latest_major ~ "re-took & graduated in new major",
+    outcome == "changed major" & GRADUATED_IND == 'Y' ~ "changed major & graduated",
+    last_period == '202020' & GRADUATED_IND != 'Y' ~ "still at University",
+    TRUE ~ NA_character_
+  ))
+
+# Fill main outcome if still at university
+data <- data %>%
+  mutate(outcome = ifelse(sub_outcome == "still at University" & is.na(outcome), "still at University", outcome))
+
+# ---- Outcome Indicator Variables ----
+
+data <- data %>%
+  mutate(
+    stopped_out_ind = ifelse(last_period <= '201940' & GRADUATED_IND != 'Y', 1, 0),
+    GRADUATED_IND_IND = ifelse(GRADUATED_IND == 'Y', 1, 0),
+    persisting = ifelse(last_period > '201940' & GRADUATED_IND != 'Y', 1, 0),
+    changed_major_ind = ifelse(major_at_time != latest_major, 1, 0),
+    changed_major_grad = ifelse(GRADUATED_IND_IND == 1 & changed_major_ind == 1, 1, 0)
+  )
+
+# ---- Validation Output ----
+
+# Table of stop-outs
+stop_outs <- data %>% filter(outcome %in% c("stopped out", "stopped out immediately"))
