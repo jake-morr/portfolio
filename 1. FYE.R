@@ -1,219 +1,209 @@
+#############################################
+# TITLE: FYE Retention Study - Modeling
+# AUTHOR: Jake Morrison
+# DESCRIPTION: Linear, logistic, and random forest models 
+#              to examine predictors of retention outcomes.
+#############################################
+
+# ---- Setup ----
+
 setwd("N:/Projects/Retention Study/FYE")
 
-#install.packages("pacman")
+# Load required packages
+library(tidyr)         # data manipulation
+library(dplyr)         # data manipulation
+library(stringr)       # string operations
+library(purrr)         # functional programming
+library(ggplot2)       # plotting
+library(data.table)    # fast data loading
+library(Hmisc)         # extra functions like %nin%
+library(dummies)       # dummy variable creation
+library(class)         # classification tools
+library(gmodels)       # crosstabs
+library(e1071)         # naive Bayes and support vector machines
+library(naivebayes)    # alternative naive Bayes package
+library(miceadds)      # cluster-robust SEs via lm.cluster
+library(car)           # diagnostics
+library(randomForest)  # random forest modeling
+library(pacman)        # package management
+library(caret)         # machine learning workflows
 
-library(tidyr)      # data manipulation
-library(dplyr)      # data manipulation
-library(stringr)
-library(purrr)
-library(ggplot2)    # data visualization
-library(data.table) # data loading speed
-library(Hmisc)      # for %nin%
-library(dummies)    # for creating dummy variables
-library(class)
-library(gmodels)
-library(e1071)
-library(naivebayes)
-library(miceadds)
-library(car)
-library(randomForest)
-library(pacman)
-library(caret)
+# Clear environment
+rm(list = ls())
 
+# ---- Load & Prepare Data ----
 
+# Load yearly datasets
+d2015 <- read.csv("2015.csv")
+d2016 <- read.csv("2016.csv")
+d2017 <- read.csv("2017.csv")
+d2018 <- read.csv("2018.csv")
+d2019 <- read.csv("2019.csv")
 
-rm(list = ls()) # remove all enviornment items
+# Add year field to each dataset
+d2015$year <- 2015
+d2016$year <- 2016
+d2017$year <- 2017
+d2018$year <- 2018
+d2019$year <- 2019
 
-# Prep Data #
+# Combine all years into one dataset
+data <- bind_rows(d2015, d2016, d2017, d2018, d2019)
 
-d2016 <- read.csv("2016.csv", header=T, sep =",")
-d2017 <- read.csv("2017.csv", header=T, sep =",")
-d2018 <- read.csv("2018.csv", header=T, sep =",")
-d2015 <- read.csv("2015.csv", header=T, sep =",")
-d2019 <- read.csv("2019.csv", header=T, sep =",")
+# Clean up environment
+rm(d2015, d2016, d2017, d2018, d2019)
 
-d2016 <- d2016 %>% mutate(year = 2016)
-d2017 <- d2017 %>% mutate(year = 2017)
-d2018 <- d2018 %>% mutate(year = 2018)
-d2015 <- d2015 %>% mutate(year = 2015)
-d2019 <- d2019 %>% mutate(year = 2019)
-
-data <- rbind(d2016,d2017,d2018,d2015,d2019)
-
-rm(d2016,d2017,d2018,d2015,d2019)
-
-# summarize data #
+# ---- Summarize Data ----
 
 data <- data %>% mutate(n = 1)
 
-z <- data %>% group_by(year) %>% 
-  summarize(n = sum(n)
+# Total count by year
+z <- data %>% group_by(year) %>% summarize(n = sum(n))
+
+# Count by math readiness
+y <- data %>% group_by(MATH_READY) %>% summarize(n = sum(n))
+
+# FYE failure rate by year
+x <- data %>%
+  filter(!is.na(FAILED_FYE)) %>%
+  group_by(year) %>%
+  summarize(
+    fail_rate = round(mean(FAILED_FYE) * 100, 2),
+    fail_n = sum(FAILED_FYE),
+    attempts = sum(FYE)
   )
 
-y <- data %>% group_by(MATH_READY) %>% 
-  summarize(n = sum(n)
+# Retention by year
+w <- data %>%
+  group_by(year) %>%
+  summarize(
+    q1 = sum(RETAINED_1Q),
+    q2 = sum(RETAINED_2Q),
+    f2f = sum(YEAR_1_RETAINED)
   )
 
-x <- data %>% filter(!is.na(FAILED_FYE)) %>%
-  group_by(year) %>% 
-  summarize(fail_rate = round((mean(FAILED_FYE))*100,2)
-            , fail_n = sum(FAILED_FYE)
-            , attempts = sum(FYE)
-  )
-
-w <- data %>% group_by(year) %>% 
-  summarize(q1 = sum(RETAINED_1Q)
-            , q2 = sum(RETAINED_2Q)
-            , f2f = sum(YEAR_1_RETAINED)
-  )
-
-# generate factor variables #
+# ---- Convert Variables to Factors ----
 
 data$RACE <- as.factor(data$RACE)
 data$GENDER <- as.factor(data$GENDER)
 data$FIRST_GEN <- as.factor(data$FIRST_GEN)
 
-# taking fye on 1 year and 1 quarter retention rate #
+# ---- Linear Models: FYE and Retention ----
 
-a <- lm(data = data, YEAR_1_RETAINED ~ FYE + EOP + CUM_GPA + CREDITS + RUNNING_START + RACE +
-                GENDER +  DORM + MATH_READY + ENGLISH_READY
-                + FIRST_GEN + factor(year) - 1)
-
+# FYE participation effect
+a <- lm(YEAR_1_RETAINED ~ FYE + EOP + CUM_GPA + CREDITS + RUNNING_START + RACE +
+          GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1, data = data)
 summary(a)
 
-a1 <- lm(data = data, RETAINED_1Q ~ FYE + EOP + CUM_GPA + CREDITS + RUNNING_START + RACE +
-          GENDER +  DORM + MATH_READY + ENGLISH_READY
-        + FIRST_GEN + factor(year) - 1)
-
+a1 <- lm(RETAINED_1Q ~ FYE + EOP + CUM_GPA + CREDITS + RUNNING_START + RACE +
+           GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1, data = data)
 summary(a1)
 
-###################
-# Columns 1 and 2 #
-###################
-
-b <- lm.cluster(data = data, YEAR_1_RETAINED ~ FYE + EOP + CREDITS + RUNNING_START + RACE 
-        + GENDER + DORM + MATH_READY + ENGLISH_READY
-        + FIRST_GEN + factor(year) - 1, cluster = "MAJOR")
-
+# Clustered SEs by MAJOR
+b <- lm.cluster(YEAR_1_RETAINED ~ FYE + EOP + CREDITS + RUNNING_START + RACE + 
+                  GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1,
+                cluster = "MAJOR", data = data)
 summary(b)
 
-b1 <- lm.cluster(data = data, RETAINED_1Q ~ FYE + EOP + CREDITS + RUNNING_START + RACE 
-                + GENDER + DORM + MATH_READY + ENGLISH_READY
-                + FIRST_GEN + factor(year) - 1, cluster = "MAJOR")
-
+b1 <- lm.cluster(RETAINED_1Q ~ FYE + EOP + CREDITS + RUNNING_START + RACE + 
+                   GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1,
+                 cluster = "MAJOR", data = data)
 summary(b1)
 
-###### break ######
+# ---- Logistic Models: FYE and Retention ----
 
-c <- glm(data = data, YEAR_1_RETAINED ~ FYE + CUM_GPA + CREDITS + RUNNING_START + RACE 
-        + GENDER + DORM + MATH_READY + ENGLISH_READY
-        + FIRST_GEN + factor(year) - 1, family = 'binomial')
-
+c <- glm(YEAR_1_RETAINED ~ FYE + CUM_GPA + CREDITS + RUNNING_START + RACE + 
+           GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1,
+         data = data, family = 'binomial')
 summary(c)
 
-c1 <- glm(data = data, RETAINED_1Q ~ FYE + CUM_GPA + CREDITS + RUNNING_START + RACE 
-         + GENDER + DORM + MATH_READY + ENGLISH_READY
-         + FIRST_GEN + factor(year) - 1, family = 'binomial')
-
+c1 <- glm(RETAINED_1Q ~ FYE + CUM_GPA + CREDITS + RUNNING_START + RACE + 
+            GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1,
+          data = data, family = 'binomial')
 summary(c1)
 
-# failing fye on 1 year and 1 quarter retention rate #
+# ---- Impact of Failing FYE ----
 
-d <- lm(data = data, YEAR_1_RETAINED ~ FAILED_FYE + EOP + CREDITS + RUNNING_START + RACE +
-          GENDER +  DORM + MATH_READY + ENGLISH_READY
-        + FIRST_GEN + factor(year) - 1)
-
+# OLS models
+d <- lm(YEAR_1_RETAINED ~ FAILED_FYE + EOP + CREDITS + RUNNING_START + RACE + 
+          GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1, data = data)
 summary(d)
 
-g <- lm(data = data, RETAINED_1Q ~ FAILED_FYE + EOP + CREDITS + RUNNING_START + RACE +
-          GENDER +  DORM + MATH_READY + ENGLISH_READY
-        + FIRST_GEN + factor(year) - 1)
-
+g <- lm(RETAINED_1Q ~ FAILED_FYE + EOP + CREDITS + RUNNING_START + RACE + 
+          GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1, data = data)
 summary(g)
 
-###################
-# Column 3 and 4  #
-###################
-
-e <- lm.cluster(data = data, YEAR_1_RETAINED ~ FAILED_FYE + EOP + CREDITS + RUNNING_START + RACE 
-                + GENDER + DORM + MATH_READY + ENGLISH_READY
-                + FIRST_GEN + factor(year) - 1, cluster = "MAJOR")
-
+# Clustered SEs
+e <- lm.cluster(YEAR_1_RETAINED ~ FAILED_FYE + EOP + CREDITS + RUNNING_START + RACE + 
+                  GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1,
+                cluster = "MAJOR", data = data)
 summary(e)
 
-h <- lm.cluster(data = data, RETAINED_1Q ~ FAILED_FYE + EOP + CREDITS + RUNNING_START + RACE 
-                + GENDER + DORM + MATH_READY + ENGLISH_READY
-                + FIRST_GEN + factor(year) - 1, cluster = "MAJOR")
-
+h <- lm.cluster(RETAINED_1Q ~ FAILED_FYE + EOP + CREDITS + RUNNING_START + RACE + 
+                  GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1,
+                cluster = "MAJOR", data = data)
 summary(h)
 
-###### break #####
+# ---- Effect of FYE Grade ----
 
-############
-# Column 5 #
-############
-
-h1 <- lm.cluster(data = data, RETAINED_1Q ~ GRADE + EOP + CREDITS + RUNNING_START + RACE 
-                + GENDER + DORM + MATH_READY + ENGLISH_READY
-                + FIRST_GEN + factor(year) - 1, cluster = "MAJOR")
-
+h1 <- lm.cluster(RETAINED_1Q ~ GRADE + EOP + CREDITS + RUNNING_START + RACE + 
+                   GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1,
+                 cluster = "MAJOR", data = data)
 summary(h1)
 
-##### break #####
-
-h2 <- lm.cluster(data = data, YEAR_1_RETAINED ~ GRADE + EOP + CREDITS + RUNNING_START + RACE 
-                 + GENDER + DORM + MATH_READY + ENGLISH_READY
-                 + FIRST_GEN + factor(year) - 1, cluster = "MAJOR")
-
+h2 <- lm.cluster(YEAR_1_RETAINED ~ GRADE + EOP + CREDITS + RUNNING_START + RACE + 
+                   GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1,
+                 cluster = "MAJOR", data = data)
 summary(h2)
 
-##### break #####
-
-f <- glm(data = data, RETAINED_1Q ~ GRADE + EOP + CREDITS + RUNNING_START + RACE 
-         + GENDER + DORM + MATH_READY + ENGLISH_READY
-         + FIRST_GEN + factor(year) - 1, family = 'binomial')
-
+# Logistic regression with FYE grade
+f <- glm(RETAINED_1Q ~ GRADE + EOP + CREDITS + RUNNING_START + RACE + 
+           GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1,
+         family = 'binomial', data = data)
 summary(f)
 
-i <- glm(data = data, RETAINED_1Q ~ FAILED_FYE + EOP + CUM_GPA + CREDITS + RUNNING_START + RACE 
-         + GENDER + DORM + MATH_READY + ENGLISH_READY
-         + FIRST_GEN + factor(year) - 1, family = 'binomial')
-
+# Logistic model: Failed FYE with cumulative GPA
+i <- glm(RETAINED_1Q ~ FAILED_FYE + EOP + CUM_GPA + CREDITS + RUNNING_START + RACE + 
+           GENDER + DORM + MATH_READY + ENGLISH_READY + FIRST_GEN + factor(year) - 1,
+         family = 'binomial', data = data)
 summary(i)
 
-# Random forest survival model #
+# ---- Random Forest Model for Retention Prediction ----
 
+# Convert outcome to factor
 data$YEAR_1_RETAINED <- as.factor(data$YEAR_1_RETAINED)
 
-data <- data %>% select(-c('MAJOR','RETAINED_1Q','RETAINED_2Q','PERSON_UID'))
+# Drop ID and other known retention columns
+data <- data %>% select(-c(MAJOR, RETAINED_1Q, RETAINED_2Q, PERSON_UID))
 
+# Split into train/test
 set.seed(49)
-train <- data %>% sample_frac(.70)
+train <- data %>% sample_frac(0.70)
 test <- data %>% anti_join(train)
 
+# Set up training control
 control <- trainControl(method = "repeatedcv",
                         number = 10,
                         repeats = 3,
                         search = "random")
 
+# Train random forest
 rf <- train(YEAR_1_RETAINED ~ ., data = train,
             method = "rf",
             metric = "Accuracy",
             trControl = control)
 
-rf$finalModel
+# Display final model summary
+print(rf$finalModel)
 
-# ret_pred <- rf$finalModel %>% 
-#    predict(newdata = test)
+# Predict retention on test set
+ret_pred <- predict.train(rf, newdata = test)
 
-ret_pred <- predict.train(rf,newdata = test)
+# Confusion matrix
+confusionMatrix(
+  data = ret_pred,
+  reference = test$YEAR_1_RETAINED
+) %>% print()
 
-
-table(
-  actualclass = test$YEAR_1_RETAINED,
-  predictedclass = ret_pred
-) %>% 
-  confusionMatrix() %>% 
-  print()
-
+# Variable importance plot
 varImpPlot(rf$finalModel)
