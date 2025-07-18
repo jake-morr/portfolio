@@ -1,7 +1,6 @@
 ##########################################
 # TITLE: Retention Analysis
 # AUTHOR: Jake Morrison
-# DATE: 12/07/20
 # DESCRIPTION: This script performs a Naive Bayes classification 
 # to predict student retention using historical student data.
 ##########################################
