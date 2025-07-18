@@ -1,7 +1,6 @@
 ##########################################
 # TITLE: DFW Longitudinal Analysis
 # AUTHOR: Jake Morrison
-# DATE: 06/09/2020
 # DESCRIPTION: Tracks students who receive D, F, or W grades and analyzes their outcomes over time.
 ##########################################
 
