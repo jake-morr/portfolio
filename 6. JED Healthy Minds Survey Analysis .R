@@ -2,7 +2,6 @@
 # Program:      JED Healthy Minds Survey Analysis    
 # Description:  Statistical Analysis of the Campus-wide JED Healthy Minds Survey  
 # Author:       Jake Morrison
-# Last Updated: 09/22/20
 # ============================================================================================
 
 # Load required libraries
