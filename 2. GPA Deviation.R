@@ -1,24 +1,24 @@
 ##########################################
-# TITLE: retention analysis
+# TITLE: Retention Analysis using GPA Deviation
 # AUTHOR: Jake Morrison
-# DATE:               DETAIL:
-# 12/07/20            created program
+# DATE: 12/07/20
+# DESCRIPTION: Analyze the impact of GPA deviation, unmet need,
+#              and other variables on student retention.
 ##########################################
-#install.packages("naivebayes")
 
-# setup #
+# ---- Setup ----
 
 setwd("N:/Projects/Retention Study/GPA Deviation")
 
-
-library(tidyr)      # data manipulation
-library(dplyr)      # data manipulation
+# Load required packages
+library(tidyr)
+library(dplyr)
 library(stringr)
 library(purrr)
-library(ggplot2)    # data visualization
-library(data.table) # data loading speed
-library(Hmisc)      # for %nin%
-library(dummies)    # for creating dummy variables
+library(ggplot2)
+library(data.table)
+library(Hmisc)
+library(dummies)
 library(class)
 library(gmodels)
 library(e1071)
@@ -26,143 +26,165 @@ library(naivebayes)
 library(miceadds)
 library(car)
 
+# Clear environment
+rm(list = ls())
 
-rm(list = ls()) # remove all enviornment items
+# ---- Load & Combine Data ----
 
-# Prep Data #
+# Read cohort data
+d2016 <- read.csv("2016.csv")
+d2017 <- read.csv("2017.csv")
+d2018 <- read.csv("2018.csv")
+d2019 <- read.csv("2019.csv")
 
-d2016 <- read.csv("2016.csv", header=T, sep =",")
-d2017 <- read.csv("2017.csv", header=T, sep =",")
-d2018 <- read.csv("2018.csv", header=T, sep =",")
-d2019 <- read.csv("2019.csv", header=T, sep =",")
+# Add cohort year
+d2016$year <- 2016
+d2017$year <- 2017
+d2018$year <- 2018
+d2019$year <- 2019
 
-d2016 <- d2016 %>% mutate(year = 2016)
-d2017 <- d2017 %>% mutate(year = 2017)
-d2018 <- d2018 %>% mutate(year = 2018)
-d2019 <- d2019 %>% mutate(year = 2019)
+# Combine datasets
+data <- bind_rows(d2016, d2017, d2018, d2019)
 
-data <- rbind(d2016,d2017,d2018,d2019)
+# Remove originals to save memory
+rm(d2016, d2017, d2018, d2019)
 
-rm(d2016,d2017,d2018,d2019)
+# ---- Data Filtering & Transformation ----
 
+# Keep only students with high school GPA
 data <- data %>% filter(!is.na(HS_GPA))
 
-# 2 qtr retention #
+# Compare GPA deviation by 2nd quarter retention
+summary(data %>% filter(RETAINED_2Q == 1) %>% pull(TERM1_DEVIATION))
+summary(data %>% filter(RETAINED_2Q == 0) %>% pull(TERM1_DEVIATION))
 
-ret <- data %>% filter(RETAINED_2Q == 1)
-n_ret <- data %>% filter(RETAINED_2Q == 0)
+# Compare GPA deviation by 1st year retention
+summary(data %>% filter(YEAR_1_RETAINED == 1) %>% pull(TERM3_CUM_DEVIATION), na.rm = TRUE)
+summary(data %>% filter(YEAR_1_RETAINED == 0) %>% pull(TERM3_CUM_DEVIATION), na.rm = TRUE)
 
-summary(ret$TERM1_DEVIATION)
-summary(n_ret$TERM1_DEVIATION)
+# Convert relevant variables to factors
+data <- data %>%
+  mutate(
+    RACE = as.factor(RACE),
+    GENDER = as.factor(GENDER),
+    FIRST_GEN = as.factor(FIRST_GEN),
+    FYE = as.factor(FYE),
+    UNMET_NEED = UNMET_NEED / 1000  # Convert unmet need to thousands
+  )
 
-# 1 year retention #
-
-ret <- data %>% filter(YEAR_1_RETAINED == 1)
-n_ret <- data %>% filter(YEAR_1_RETAINED == 0)
-
-summary(ret$TERM3_CUM_DEVIATION, na.rm = TRUE)
-summary(n_ret$TERM3_CUM_DEVIATION, na.rm = TRUE)
-
-# generate factor variables #
-
-data$RACE <- as.factor(data$RACE)
-data$GENDER <- as.factor(data$GENDER)
-data$FIRST_GEN <- as.factor(data$FIRST_GEN)
-data$FYE <- as.factor(data$FYE)
-
-# put unmet need in thousands #
-
-data <- data %>% mutate(UNMET_NEED = (UNMET_NEED/1000))
-
+# Data cleaning: remove unusual rows
 data <- data %>% filter(-TERM2_CUM_DEVIATION != HS_GPA)
 
+# Only include students who were retained through 1st quarter
 data <- data %>% filter(RETAINED_1Q == 1)
 
-# simple lpm #
+# ---- Linear Probability Models ----
 
-simp <- data %>% select(YEAR_1_RETAINED,RETAINED_2Q,TERM1_CUM_DEVIATION,TERM2_CUM_DEVIATION
-                        ,TERM3_CUM_DEVIATION,CREDITS,RUNNING_START,RACE,GENDER,FIRST_GEN,FYE,UNMET_NEED,year,MAJOR)
+# Select relevant variables
+simp <- data %>% select(
+  YEAR_1_RETAINED, RETAINED_2Q, TERM1_CUM_DEVIATION, TERM2_CUM_DEVIATION,
+  TERM3_CUM_DEVIATION, CREDITS, RUNNING_START, RACE, GENDER,
+  FIRST_GEN, FYE, UNMET_NEED, year, MAJOR
+)
 
-a <- lm.cluster(data = simp, RETAINED_2Q ~ TERM2_CUM_DEVIATION + UNMET_NEED + CREDITS + RUNNING_START + RACE + GENDER
-        + FIRST_GEN + FYE + year - 1, cluster = "MAJOR")
+# Model 1: LPM for 2nd quarter retention
+lpm_q2 <- lm.cluster(
+  data = simp,
+  RETAINED_2Q ~ TERM2_CUM_DEVIATION + UNMET_NEED + CREDITS + RUNNING_START + RACE +
+    GENDER + FIRST_GEN + FYE + year - 1,
+  cluster = "MAJOR"
+)
+summary(lpm_q2)
 
-summary(a)
+# Model 2: LPM for 1st year retention
+lpm_y1 <- lm(
+  data = simp,
+  YEAR_1_RETAINED ~ TERM3_CUM_DEVIATION + UNMET_NEED + CREDITS + RUNNING_START +
+    RACE + GENDER + FIRST_GEN + FYE + year - 1
+)
+summary(lpm_y1)
 
-b <- lm(data = simp, YEAR_1_RETAINED ~ TERM3_CUM_DEVIATION + UNMET_NEED + CREDITS + RUNNING_START
-                + RACE + GENDER + FIRST_GEN + FYE + year - 1)
+# With cluster-robust SEs
+lpm_y1_robust <- lm.cluster(
+  data = simp,
+  YEAR_1_RETAINED ~ TERM3_CUM_DEVIATION + UNMET_NEED + CREDITS + RUNNING_START +
+    RACE + GENDER + FIRST_GEN + FYE + year - 1,
+  cluster = "MAJOR"
+)
+summary(lpm_y1_robust)
 
-summary(b)
+# ---- Visualization: Predicted Probability vs GPA Deviation ----
 
-b <- lm.cluster(data = simp, YEAR_1_RETAINED ~ TERM3_CUM_DEVIATION + UNMET_NEED + CREDITS + RUNNING_START 
-        + RACE + GENDER + FIRST_GEN + FYE + year - 1 + interact, cluster = "MAJOR")
+# Refit model for predictions
+pred_model <- lm(
+  data = simp,
+  YEAR_1_RETAINED ~ TERM3_CUM_DEVIATION + UNMET_NEED + CREDITS + RUNNING_START +
+    RACE + GENDER + FIRST_GEN + FYE + year - 1
+)
 
-summary(b)
+# Predict and clamp values between 0 and 1
+simp$predicted <- predict(pred_model, newdata = simp)
+simp <- simp %>% mutate(predicted = pmin(pmax(predicted, 0), 1))
 
-# Graphing #
+# Plot predicted retention vs GPA deviation
+ggplot(simp, aes(x = TERM3_CUM_DEVIATION, y = predicted)) +
+  stat_smooth(method = "glm", method.args = list(family = "binomial")) +
+  labs(
+    title = "Students' Likelihood of Persisting Based on GPA Deviations",
+    x = "GPA Deviation",
+    y = "Probability of Persistence"
+  )
 
-d <- lm(data = simp, YEAR_1_RETAINED ~ TERM3_CUM_DEVIATION + UNMET_NEED + CREDITS + RUNNING_START
-        + RACE + GENDER + FIRST_GEN + FYE + year - 1)
+# ---- Logistic Regression ----
 
-summary(d)
+# Convert to factors for logistic modeling
+simp <- simp %>%
+  mutate(
+    RUNNING_START = as.factor(RUNNING_START),
+    RETAINED_2Q = as.factor(RETAINED_2Q)
+  )
 
-simp$predicted <- predict(d, newdata = simp, type = 'response')
+# Logistic model: predicting 2Q retention
+log_model <- glm(
+  data = simp,
+  RETAINED_2Q ~ TERM2_CUM_DEVIATION + UNMET_NEED + CREDITS + RUNNING_START +
+    RACE + GENDER + FIRST_GEN + FYE,
+  family = "binomial"
+)
+summary(log_model)
 
-simp <- simp %>% mutate(predicted = case_when(predicted > 1 ~ 1
-                                              , predicted < 0 ~ 0
-                                              , TRUE ~ predicted))
+# Predict from logistic model
+simp$predicted <- predict(log_model, newdata = simp, type = "response")
 
-ggplot(data = simp, aes(x=TERM3_CUM_DEVIATION , y=predicted)) + 
-  stat_smooth(method = "glm", 
-              method.args = list(family = "binomial")) + ylab("Probability of Persistance") +
-  xlab("GPA Deviation") +
-  labs(title = "Students likelihood of Persisting based on GPA Deviations")
-
-## simple logistic ##
-
-
-# convert to factor #
-
-simp$RUNNING_START <- as.factor(simp$RUNNING_START)
-simp$RETAINED_2Q <- as.factor(simp$RETAINED_2Q)
-
-c <- glm(data = simp, RETAINED_2Q ~ TERM2_CUM_DEVIATION + UNMET_NEED + CREDITS + RUNNING_START + RACE + GENDER + FIRST_GEN + FYE, family = "binomial")
-
-summary(c)
-
-# add predicted values #
-
-simp$predicted <- predict(m, newdata = simp, type = 'response')
-
-# reorder #
-
+# Sort by predicted retention
 simp <- simp %>% arrange(desc(RETAINED_2Q))
 
-# scatter plot #
+# ---- Visualization ----
 
-ggplot(data = simp, aes(x=TERM3_CUM_DEVIATION , y=predicted)) + 
-  stat_smooth(method = "glm", 
-                             method.args = list(family = "binomial"))
+# GPA Deviation vs Prediction
+ggplot(simp, aes(x = TERM3_CUM_DEVIATION, y = predicted)) +
+  stat_smooth(method = "glm", method.args = list(family = "binomial"))
 
-ggplot(data = simp, aes(x=TERM2_CUM_DEVIATION , y=predicted)) + 
+# TERM2 GPA Deviation vs Prediction
+ggplot(simp, aes(x = TERM2_CUM_DEVIATION, y = predicted)) +
   geom_smooth()
 
-ggplot(data = simp, aes(x=UNMET_NEED , y=predicted)) + 
- geom_smooth(method="gam")
+# UNMET_NEED vs Prediction
+ggplot(simp, aes(x = UNMET_NEED, y = predicted)) +
+  geom_smooth(method = "gam")
 
+# ---- Subgroup: Non-Retained Students ----
 
-
-# split data to non-retained students #
-
+# Filter to non-retained
 simp_n_ret <- simp %>% filter(RETAINED_2Q == 0)
 
-simp_n_ret$predicted <- predict(m, newdata = simp_n_ret, type = 'response')
+# Predict again
+simp_n_ret$predicted <- predict(log_model, newdata = simp_n_ret, type = "response")
 
-ggplot(data = simp_n_ret, aes(x=TERM2_CUM_DEVIATION , y=predicted)) + 
-  geom_point() + geom_smooth()
+# Scatter plot of GPA deviation vs predicted for non-retained
+ggplot(simp_n_ret, aes(x = TERM2_CUM_DEVIATION, y = predicted)) +
+  geom_point() +
+  geom_smooth()
 
-# confidence interval
-
-confint(d)
-
-
-
+# ---- Confidence Intervals ----
+confint(pred_model)
