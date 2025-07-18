@@ -1,7 +1,6 @@
 ##########################################
 # TITLE: Retention Analysis using GPA Deviation
 # AUTHOR: Jake Morrison
-# DATE: 12/07/20
 # DESCRIPTION: Analyze the impact of GPA deviation, unmet need,
 #              and other variables on student retention.
 ##########################################
