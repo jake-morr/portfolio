@@ -48,9 +48,10 @@ that rendered the student at risk of stoping out. This research will be used in 
 This code was devloped in consultation with the EWU JED team and the Healthy Minds Survey through University of Michigan. Nick Franco and the JED team tasked me with evaluating 
 statistical differences between population groups.
 
-7. Graduated Grduating Datablock
-SQL Code for Argos
+7. Thesis Regression
 
-This is the code powering the graduated/applied to graduate datablock. This DataBlock was developed to be able to answer 80% of inquiries on students who have graduated or have
-applied to graduate.
+This STATA code was developed to run clean the data and run the regressions for my Masters Thesis
 
+8. Thesis Robustness Check
+
+This STATA code was developed for the robustness checks portion of my Masters thesis
