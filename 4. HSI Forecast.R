@@ -1,7 +1,6 @@
 ##########################################
 # TITLE: HSI Proportion Forecast
 # AUTHOR: Jake Morrison
-# DATE: 
 # DESCRIPTION: Forecasts the proportion of Hispanic/Latino students
 #              to support HSI (Hispanic-Serving Institution) status tracking.
 ##########################################
