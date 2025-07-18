@@ -1,149 +1,132 @@
 ##########################################
 # TITLE: REGISTRATION_ANALYSIS_CLEANING
 # AUTHOR: Jake Morrison
-# DATE:               DETAIL:
-# 05/26/2020          created program
+# DATE: 05/26/2020
+# DESCRIPTION: Identifies undergraduate students who have not yet registered 
+#              and flags those registering late, including hold status.
 ##########################################
 
+# ---- Setup ----
 
-##install.packages("ROracle")
-# need to figure out how to get this package to work
-
-library(tidyr)      # data manipulation
-library(dplyr)      # data manipulation
+# Load necessary libraries
+library(tidyr)
+library(dplyr)
 library(stringr)
 library(purrr)
-library(ggplot2)    # data visualization
-library(data.table) # data loading speed
-library(Hmisc)      # for %nin%
-library(dummies)    # for creating dummy variables
-##library(ROracle)  # for connecting to ORacle databse
+library(ggplot2)
+library(data.table)
+library(Hmisc)
+library(dummies)
+library(doBy)
+# library(ROracle) # Uncomment if ROracle is configured for DB access
 
-#-----------------------
-# set working directory-
-#-----------------------
-
+# Set working directory
 setwd("N:/Projects/INSTITUTIONAL_ANALYSTICS_AND_PLANNING/REGISTRATION_TIME")
 
-rm(list = ls()) # remove all enviornment items
+# Clear environment
+rm(list = ls())
 
+# ---- Load Data ----
 
+today <- read.csv("today.csv")
+registration <- read.csv("clean.csv")
+holds <- read.csv("holds.csv")
 
-#---------------
-# read in data -
-#---------------
+# ---- Prepare and Clean Today's Data ----
 
-today <- read.csv("today.csv", header=T, sep =",")
-registration <- read.csv("clean.csv", header=T, sep=",")
-holds <- read.csv("holds.csv", header=T, sep=",")
+# Convert registration date to proper format
+today <- today %>%
+  mutate(registration_date = as.Date(registration_date, "%d-%b-%y"))
 
-#--------------------------------------------
-# clean current data and prepare from merge -
-#--------------------------------------------
-
-# convert registration date to date #
-
-today <- today %>% mutate(registration_date =as.Date(registration_date, "%d-%b-%y"))
-
-# generate matching columns #
-
+# Standardize column names
 registration <- registration %>% rename(Major = major)
+data <- bind_rows(registration, today)
 
-today <- today %>% mutate(observations = "")
-today <- today %>% mutate(registration_date_able = "")
-today <- today %>% mutate(days_dif = "")
-today <- today %>% mutate(count = "")
-today <- today %>% mutate(remove = "")
-today <- today %>% mutate(days_diff_avg = "")
-today <- today %>% mutate(days_diff_avg = "")
+# Remove placeholder variables and re-add as needed
+data <- data %>%
+  select(-observations) %>%
+  mutate(
+    observations = NA,
+    registration_date_able = NA,
+    days_dif = NA,
+    count = NA,
+    remove = NA,
+    days_diff_avg = NA
+  )
 
+# ---- Student Registration Status ----
 
-today <- today %>% rename(days_diff = days_dif)
+# Count number of registration records per student
+data <- data %>%
+  group_by(ID) %>%
+  add_count(name = "observations") %>%
+  ungroup()
 
-#--------
-# merge -
-#--------
+# Keep only students who have not yet registered this term
+data <- data %>% filter(observations < 2)
 
-combined <- rbind(registration, today)
+# ---- Assign Registration Eligibility Dates ----
 
-#--------------------------
-# clean data for analysis -
-#--------------------------
+data <- data %>%
+  mutate(
+    registration_date_able = case_when(
+      credits >= 180 & academic_period == 202020 & level == 'UG' ~ '05-19-20',
+      between(credits, 150, 179.9999) & academic_period == 202020 & level == 'UG' ~ '05-20-20',
+      between(credits, 120, 149.9) & academic_period == 202020 & level == 'UG' ~ '05-21-20',
+      between(credits, 90, 119.9) & academic_period == 202020 & level == 'UG' ~ '05-22-20',
+      between(credits, 60, 89.9) & academic_period == 202020 & level == 'UG' ~ '05-26-20',
+      between(credits, 30, 59.9) & academic_period == 202020 & level == 'UG' ~ '05-27-20',
+      between(credits, 0, 29.9) & academic_period == 202020 & level == 'UG' ~ '05-28-20',
+      academic_period == 202020 & level %in% c('GR', 'PB') ~ '05-18-20',
+      TRUE ~ NA_character_
+    ),
+    registration_date_able = as.Date(registration_date_able, "%m-%d-%y"),
+    registration_date = Sys.Date()
+  )
 
-# remove 'observations' in order to replace with current number #
+# Calculate days past eligible registration date
+data <- data %>%
+  mutate(
+    days_dif = as.numeric(difftime(registration_date, registration_date_able, units = "days"))
+  )
 
-combined <- select(combined, -c(observations))
+# ---- Late Registration Flags ----
 
-# add count of students to identify who has registered #
+# Use difference from average to flag late registrations
+data <- data %>%
+  mutate(
+    late_flag = ifelse(days_dif > as.numeric(days_diff_avg), 'Y', 'N'),
+    late_20_flag = ifelse(days_dif > (as.numeric(days_diff_avg) + 20), 'Y', 'N')
+  )
 
-combined <- combined %>% group_by(ID) %>% add_count(ID)
+# ---- Merge with Holds ----
 
-combined <- combined %>% rename(observations = n)
+# Limit to undergraduate students
+data <- data %>%
+  filter(level %in% c('UG', 'US')) %>%
+  mutate(days_past = as.numeric(Sys.Date() - registration_date_able))
 
-# remove student who have registered for current term #
-
-combined <- combined %>% filter(observations < 2)
-
-# generate 'registration_able_date' based on banded credit hours #
-
-combined <- combined %>% mutate(registration_date_able = case_when(credits >= 180 & academic_period == 202020 & level == 'UG' ~ '05-19-20'
-                                                                   ,  between(credits, 150,179.9999) & academic_period == 202020 & level == 'UG' ~ '05-20-20'
-                                                                   ,  between(credits, 120,149.9) & academic_period == 202020 & level == 'UG' ~ '05-21-20'
-                                                                   ,  between(credits, 90,119.9) & academic_period == 202020 & level == 'UG' ~ '05-22-20'
-                                                                   ,  between(credits, 60,89.9) & academic_period == 202020 & level == 'UG' ~ '05-26-20'
-                                                                   ,  between(credits, 30,59.9) & academic_period == 202020 & level == 'UG' ~ '05-27-20'
-                                                                   ,  between(credits, 0,29.9) & academic_period == 202020 & level == 'UG' ~ '05-28-20'
-                                                                   ,  academic_period == 202020 & level == 'GR' | academic_period == 202020 & level == 'PB' ~ '05-18-20'))
-# format 'registration_able_date' to date format #
-
-combined <- combined %>% mutate(registration_date_able =as.Date(registration_date_able, "%m-%d-%y"))
-
-# change registration date to todays date for later calculations #
-
-combined <- combined %>% mutate(registration_date = Sys.Date())
-
-# generate days difference #
-
-combined <- combined %>% mutate(days_dif = difftime(registration_date, registration_date_able, units = "days"))
-
-#---------------------------------
-# create late registration flags -
-#---------------------------------
-
-combined <- combined %>% mutate(late_flag = case_when(days_dif > days_diff_avg ~ 'Y'
-                                                      , TRUE ~ 'N'))
-
-combined <- combined %>% mutate(late_20_flag = case_when(days_dif > (as.numeric(days_diff_avg) +20) ~ 'Y'
-                                                      , TRUE ~ 'N'))
-
-#----------------
-# add hold info -
-#----------------
-
-# limit to undergrad #
-
-combined <- combined %>% filter(level == 'UG' | level == 'US')
-
-combined <- combined %>% mutate(days_past = (Sys.Date() - registration_date_able))
-
+# Keep only active holds
 holds <- holds %>% filter(active.indicator == 'Y')
 
-combined_hold <- merge(x = combined, y = holds, by = "ID", all.x = TRUE)
+# Merge hold data
+combined_hold <- merge(data, holds, by = "ID", all.x = TRUE)
 
+# Remove rows missing eligibility dates
 combined_hold <- combined_hold %>% filter(!is.na(registration_date_able))
 
-#----------------------------
-# select columns for output -
-#----------------------------
+# ---- Final Output Prep ----
 
-output <- combined_hold %>% select(name,ID,credits,level,class_standing,advisor_type,advisor,HOLD_DESC,active.indicator, registration_hold,registration_date_able,days_diff_avg,days_past,late_flag,late_20_flag)
+output <- combined_hold %>%
+  select(
+    name, ID, credits, level, class_standing, advisor_type, advisor,
+    HOLD_DESC, active.indicator, registration_hold,
+    registration_date_able, days_diff_avg, days_past,
+    late_flag, late_20_flag
+  ) %>%
+  mutate(across(where(is.character), ~ ifelse(is.na(.), "", .))) %>%
+  rename(hold_description = HOLD_DESC)
 
-output <- output %>% mutate_if(is.character, funs(ifelse(is.na(.),"",.)))
-
-output <- output %>% rename(hold_description = HOLD_DESC)
-
-#------------
-# write out -
-#------------
+# ---- Write Output ----
 
 write.csv(output, file = "today_analysis.csv", row.names = FALSE)
